@@ -62,16 +62,21 @@ void logErrorAndExit(void)  {
 
 bool generateLayout(UIElement *root) {
     UI_BackgroundColor(root, (UIColor) { 0, 0, 0, 255 });
-    UI_LayoutDirection(root, UILayoutDirection_leftToRight);
-    UI_Padding(root, 20);
-    UI_ChildGap(root, 10);
-    UI_AlignX(root, UIAlignX_right);
-    UI_AlignY(root, UIAlignY_bottom);
-    for (int i = 0; i < 3; i++) {
-        UIElement *outer = UIElement_New(root);
-        UI_FixedWidth(outer, 50.0f + 50 * i);
-        UI_FixedHeight(outer, 100.0f + 100 * i);
-        UI_BackgroundColor(outer, (UIColor) { 75 * i, 75 * i, 255, 255 });
-    }
+    UI_Padding(root, 40.0f);
+
+    UIElement *outer = UIElement_New(root);
+    UI_BackgroundColor(outer, (UIColor) { 255, 0, 0, 255 });
+    UI_AlignX(outer, UIAlignX_center);
+    UI_Padding(outer, 10.0f);
+
+    UIElement *child1 = UIElement_New(outer);
+    UI_BackgroundColor(child1, (UIColor) { 0, 255, 0, 255 });
+    UI_FixedWidth(child1, 300.0f);
+    UI_FixedHeight(child1, 300.0f);
+
+    UIElement *child2 = UIElement_New(outer);
+    UI_BackgroundColor(child2, (UIColor) { 0, 0, 255, 255 });
+    UI_FixedWidth(child2, 200.0f);
+    UI_FixedHeight(child2, 200.0f);
     return true;
 }

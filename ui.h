@@ -1,8 +1,6 @@
 #ifndef UI_H_
 #define UI_H_
 
-#define UI_IMPLEMENTATION
-
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
@@ -20,15 +18,8 @@ typedef struct UIColor {
 typedef enum UISizing {
     UISizing_fixed,
     UISizing_fill,
-    UISizing_fit,
-    UISizing_percent
+    UISizing_fit
 } UISizing;
-
-typedef struct UISizeAxis {
-    float percent;
-    float min, max;
-    UISizing type;
-} UISizeAxis;
 
 typedef struct UIPadding {
     float top, bottom, left, right;
@@ -37,16 +28,11 @@ typedef struct UIPadding {
 typedef struct UIContext UIContext;
 typedef struct UIElement UIElement;
 
-typedef struct UIChildren {
+typedef struct UI__Children {
     UIElement **data;
-    size_t len;
-    size_t cap;
-} UIChildren;
-
-typedef struct UIString {
-    char *text;
-    size_t len;
-} UIString;
+    uint16_t len;
+    uint16_t cap;
+} UI__Children;
 
 typedef enum UILayoutDirection {
     UILayoutDirection_topToBottom,
@@ -70,11 +56,16 @@ typedef enum UIAlignY {
 typedef struct UILayout {
     UIPadding padding;
     UIPadding margin;
+    uint8_t direction : 2;
+    uint8_t alignX : 2;
+    uint8_t alignY : 2;
+    uint8_t w_sizing;
+    uint8_t h_sizing;
     float childGap;
-    UILayoutDirection direction;
-    UIAlignX alignX;
-    UIAlignY alignY;
-    UISizeAxis w, h;
+    float w_weight;
+    float w_min, w_max;
+    float h_weight;
+    float h_min, h_max;
 } UILayout;
 
 struct UIElement {
@@ -83,19 +74,13 @@ struct UIElement {
     UIColor backgroundColor;
     UIElement *parent;
     UIContext *context;
-    union {
-        UIChildren children;
-        UIString text;
-    } content;
+    UI__Children children;
 };
 
-typedef struct UIElementAllocator {
-    size_t capacity;
-    size_t freeBucketCount;
-    size_t nextFreeBucket;
-    size_t *freeIndices;
-    UIElement *data;
-} UIElementAllocator;
+typedef struct UI__ElementBucket {
+    UIElement element;
+    struct UI__ElementBucket *next;
+} UI__ElementBucket;
 
 typedef struct UIMouse {
     int32_t x, y;
@@ -110,20 +95,15 @@ struct UIContext {
     void *userData;
     UIWindow window;
     UIElement *root;
-    UIElementAllocator elements;
+    UI__ElementBucket *freeElement;
+    size_t freeElementCount;
+    size_t maxFreeElementCount;
 };
 
-bool UI__ElementAllocator_Init(UIElementAllocator *alloc, size_t capacity);
-void UI__ElementAllocator_Destroy(UIElementAllocator *alloc);
-UIElement *UI__ElementAllocator_Alloc(UIElementAllocator *alloc);
-void UI__ElementAllocator_Free(UIElementAllocator *alloc, UIElement *element);
-
-bool UIContext_Init(UIContext *ctx, size_t maxElementCount, void *userData);
+UIElement *UIElement_New(UIElement *parent);
 
 bool UI__Element_AddChild(UIElement *parent, UIElement *child);
 void UI__Element_RemoveChild(UIElement *child);
-
-UIElement *UIElement_New(UIElement *parent);
 
 void UI_BackgroundColor(UIElement *element, UIColor color);
 
@@ -143,6 +123,11 @@ void UI_AlignY(UIElement *element, UIAlignY align);
 
 void UI_LayoutDirection(UIElement *element, UILayoutDirection direction);
 
+bool UIContext_Init(UIContext *ctx, size_t maxElementCount, void *userData);
+
+UIElement *UI__Context_AllocElement(UIContext *ctx);
+void UI__Context_FreeElement(UIContext *ctx, UIElement *element);
+
 void UIContext_UpdateWindow(UIContext *ctx, uint32_t width, uint32_t height);
 bool UIContext_Draw(UIContext *ctx);
 
@@ -160,11 +145,6 @@ void UI__ElementPositionY(UIElement *element);
 
 bool UI__ElementDraw(UIElement *element);
 
-UIElement *UI__Context_AllocElement(UIContext *ctx);
-void UI__Context_FreeElement(UIContext *ctx, UIElement *element);
-
-void UI__Context_UpdateLayout(UIContext *ctx);
-
 float UI_fmax2(float a, float b);
 float UI_fmax3(float a, float b, float c);
 
@@ -179,63 +159,13 @@ bool UI_DrawRect(UIContext *ctx, UIRect rect, UIColor color);
 
 #ifdef UI_IMPLEMENTATION
 
-bool UI__ElementAllocator_Init(UIElementAllocator *alloc, size_t capacity) {
-    alloc->capacity = capacity;
-    alloc->freeBucketCount = 0;
-    alloc->nextFreeBucket = 0;
-    alloc->freeIndices = NULL;
-    alloc->data = NULL;
-
-    size_t totalSize = sizeof(UIElement) * capacity + sizeof(size_t) * capacity;
-    UIElement *data = (UIElement *)UI_MemAlloc(totalSize);
-    if (data == NULL)
-        return false;
-    size_t *freeIndices = (size_t *)(data + capacity);
-
-    for (size_t i = 0; i < capacity; i++)
-        freeIndices[i] = i;
-
-    alloc->data = data;
-    alloc->freeIndices = freeIndices;
-    alloc->freeBucketCount = capacity;
-
-    return true;
-}
-
-void UI__ElementAllocator_Destroy(UIElementAllocator *alloc) {
-    if (alloc->data != NULL)
-        UI_MemFree(alloc->data);
-}
-
-UIElement *UI__ElementAllocator_Alloc(UIElementAllocator *alloc) {
-    if (alloc->freeBucketCount == 0)
-        return NULL;
-    size_t nextFreeBucket = alloc->nextFreeBucket;
-    UIElement *bucket = alloc->data + nextFreeBucket;
-    alloc->freeBucketCount--;
-    alloc->nextFreeBucket++;
-    // Avoid %
-    if (nextFreeBucket + 1 == alloc->capacity)
-        alloc->nextFreeBucket = 0;
-    else
-        alloc->nextFreeBucket++;
-    return bucket;
-}
-
-void UI__ElementAllocator_Free(UIElementAllocator *alloc, UIElement *element) {
+UIElement *UIElement_New(UIElement *parent) {
+    UIElement *element = UI__Context_AllocElement(parent->context);
     if (element == NULL)
-        return;
-    size_t bucketIdx = (element - alloc->data) / sizeof(UIElement);
-
-    // alloc->nextFreeBucket + alloc->freeBucketCount % alloc->capacity could overflow
-    size_t idxCountBeforeOverflow = alloc->capacity - alloc->nextFreeBucket;
-    size_t newFreeIdx;
-    if (alloc->freeBucketCount < idxCountBeforeOverflow)
-        newFreeIdx = alloc->nextFreeBucket + alloc->freeBucketCount;
-    else
-        newFreeIdx = alloc->freeBucketCount - idxCountBeforeOverflow;
-
-    alloc->freeIndices[newFreeIdx] = bucketIdx;
+        return NULL;
+    if (!UI__Element_AddChild(parent, element))
+        return NULL;
+    return element;
 }
 
 bool UI__Element_AddChild(UIElement *parent, UIElement *child) {
@@ -246,27 +176,27 @@ bool UI__Element_AddChild(UIElement *parent, UIElement *child) {
 
     child->parent = parent;
 
-    if (parent->content.children.len < parent->content.children.cap) {
-        parent->content.children.data[parent->content.children.len++] = child;
+    if (parent->children.len < parent->children.cap) {
+        parent->children.data[parent->children.len++] = child;
         return true;
     }
     UIElement **newData;
-    if (parent->content.children.data == NULL)
+    if (parent->children.data == NULL)
         newData = (UIElement **)UI_MemAlloc(sizeof(UIElement *) * 2);
     else {
         newData = (UIElement **)UI_MemExpand(
-            parent->content.children.data,
-            sizeof(UIElement *) * parent->content.children.cap * 2);
+            parent->children.data,
+            sizeof(UIElement *) * parent->children.cap * 2);
     }
 
     if (newData == NULL)
         return false;
-    if (parent->content.children.cap == 0)
-        parent->content.children.cap = 2;
+    if (parent->children.cap == 0)
+        parent->children.cap = 2;
     else
-        parent->content.children.cap *= 2;
-    parent->content.children.data = newData;
-    newData[parent->content.children.len++] = child;
+        parent->children.cap *= 2;
+    parent->children.data = newData;
+    newData[parent->children.len++] = child;
     return true;
 }
 
@@ -275,24 +205,15 @@ void UI__Element_RemoveChild(UIElement *child) {
     if (parent == NULL)
         return;
     child->parent = NULL;
-    for (size_t i = 0, n = parent->content.children.len; i < n; i++) {
-        UIElement *ith_child = parent->content.children.data[i];
+    for (size_t i = 0, n = parent->children.len; i < n; i++) {
+        UIElement *ith_child = parent->children.data[i];
         if (ith_child == child) {
             for (size_t j = i + 1; j < n; j++)
-                parent->content.children.data[j - 1] = parent->content.children.data[j];
-            parent->content.children.len--;
+                parent->children.data[j - 1] = parent->children.data[j];
+            parent->children.len--;
             break;
         }
     }
-}
-
-UIElement *UIElement_New(UIElement *parent) {
-    UIElement *element = UI__Context_AllocElement(parent->context);
-    if (element == NULL)
-        return NULL;
-    if (!UI__Element_AddChild(parent, element))
-        return NULL;
-    return element;
 }
 
 void UI_BackgroundColor(UIElement *element, UIColor color) {
@@ -300,31 +221,27 @@ void UI_BackgroundColor(UIElement *element, UIColor color) {
 }
 
 void UI_FitWidth(UIElement *element) {
-    element->layout.w.type = UISizing_fit;
-    element->layout.w.percent = 0.0f;
+    element->layout.w_sizing = UISizing_fit;
+    element->layout.w_weight = 1.0f;
 }
 
 void UI_FitHeight(UIElement *element) {
-    element->layout.h.type = UISizing_fit;
-    element->layout.h.percent = 0.0f;
+    element->layout.h_sizing = UISizing_fit;
+    element->layout.w_weight = 1.0f;
 }
 
 void UI_FixedWidth(UIElement *element, float width) {
-    element->layout.w = (UISizeAxis) {
-        .type = UISizing_fixed,
-        .percent = 0.0f,
-        .min = width,
-        .max = width
-    };
+    element->layout.w_sizing = UISizing_fixed;
+    element->layout.w_weight = 1.0f;
+    element->layout.w_min = width;
+    element->layout.w_max = width;
 }
 
 void UI_FixedHeight(UIElement *element, float height) {
-    element->layout.h = (UISizeAxis) {
-        .type = UISizing_fixed,
-        .percent = 0.0f,
-        .min = height,
-        .max = height
-    };
+    element->layout.h_sizing = UISizing_fixed;
+    element->layout.h_weight = 0.0f;
+    element->layout.h_min = height;
+    element->layout.h_max = height;
 }
 
 void UI_Padding(UIElement *element, float padding) {
@@ -361,14 +278,12 @@ void UI_LayoutDirection(UIElement *element, UILayoutDirection direction) {
 
 bool UIContext_Init(UIContext *ctx, size_t maxElementCount, void *userData) {
     ctx->userData = userData;
-    if (!UI__ElementAllocator_Init(&ctx->elements, maxElementCount))
-        return false;
-
+    ctx->freeElement = NULL;
+    ctx->maxFreeElementCount = maxElementCount;
+    ctx->freeElementCount = 0;
     UIElement *root = UI__Context_AllocElement(ctx);
-    if (!root) {
-        UI__ElementAllocator_Destroy(&ctx->elements);
+    if (!root)
         return false;
-    }
     UI_FixedWidth(root, 0);
     UI_FixedHeight(root, 0);
 
@@ -377,6 +292,54 @@ bool UIContext_Init(UIContext *ctx, size_t maxElementCount, void *userData) {
     ctx->window.h = 0;
 
     return true;
+}
+
+UIElement *UI__Context_AllocElement(UIContext *ctx) {
+    UIElement *element = NULL;
+    if (ctx->freeElement != NULL) {
+        element = &ctx->freeElement->element;
+        ctx->freeElement = ctx->freeElement->next;
+        ctx->freeElementCount--;
+    } else {
+        UI__ElementBucket *bucket = (UI__ElementBucket *)UI_MemAlloc(sizeof(UI__ElementBucket));
+        if (bucket == NULL)
+            return NULL;
+        element = &bucket->element;
+    }
+
+    element->context = ctx;
+    element->box = (UIRect) { 0, 0, 0, 0 };
+    element->parent = NULL;
+    element->backgroundColor = (UIColor) { 255, 255, 255, 255 };
+    element->children = (UI__Children) { .len = 0, .cap = 0, .data = NULL };
+    element->layout = (UILayout) {
+        .padding = { 0, 0, 0, 0 },
+        .margin = { 0, 0, 0, 0 },
+        .childGap = 0,
+        .alignX = UIAlignX_left,
+        .alignY = UIAlignY_top,
+        .direction = UILayoutDirection_topToBottom,
+        .w_sizing = UISizing_fit,
+        .w_min = 0.0f,
+        .w_max = 0.0f,
+        .w_weight = 1.0f,
+        .h_sizing = UISizing_fit,
+        .h_min = 0.0f,
+        .h_max = 0.0f,
+        .h_weight = 1.0f
+    };
+    return element;
+}
+
+void UI__Context_FreeElement(UIContext *ctx, UIElement *element) {
+    if (ctx->freeElementCount < ctx->maxFreeElementCount) {
+        UI__ElementBucket *bucket = (UI__ElementBucket *)element;
+        bucket->next = ctx->freeElement;
+        ctx->freeElement = bucket;
+        ctx->freeElementCount++;
+    } else {
+        UI_MemFree(element);
+    }
 }
 
 void UIContext_UpdateWindow(UIContext *ctx, uint32_t width, uint32_t height) {
@@ -396,12 +359,12 @@ bool UIContext_Draw(UIContext *ctx) {
 }
 
 void UI__ElementFitSize(UIElement *element) {
-    for (size_t i = 0, n = element->content.children.len; i < n; i++)
-        UI__ElementFitSize(element->content.children.data[i]);
+    for (size_t i = 0, n = element->children.len; i < n; i++)
+        UI__ElementFitSize(element->children.data[i]);
 
-    switch (element->layout.w.type) {
+    switch (element->layout.w_sizing) {
     case UISizing_fixed:
-        element->box.w = element->layout.w.min;
+        element->box.w = element->layout.w_min;
         break;
     case UISizing_fit:
         UI__ElementFitWidth(element);
@@ -409,9 +372,9 @@ void UI__ElementFitSize(UIElement *element) {
         break;
     }
 
-    switch (element->layout.h.type) {
+    switch (element->layout.h_sizing) {
     case UISizing_fixed:
-        element->box.h = element->layout.h.min;
+        element->box.h = element->layout.h_min;
         break;
     case UISizing_fit:
         UI__ElementFitHeight(element);
@@ -422,7 +385,7 @@ void UI__ElementFitSize(UIElement *element) {
 
 void UI__ElementFitWidth(UIElement *element) {
     UIPadding padding = element->layout.padding;
-    if (element->content.children.len == 0) {
+    if (element->children.len == 0) {
         element->box.w = padding.left + padding.right;
         return;
     }
@@ -433,13 +396,13 @@ void UI__ElementFitWidth(UIElement *element) {
                  || element->layout.direction == UILayoutDirection_rightToLeft;
 
     float prevMargin = padding.left;
-    for (size_t i = 0, n = element->content.children.len; i < n; i++) {
-        UIElement *child = element->content.children.data[i];
+    for (size_t i = 0, n = element->children.len; i < n; i++) {
+        UIElement *child = element->children.data[i];
         UIPadding margin = child->layout.margin;
 
         if (sumWidth) {
             float gap = i == 0 ? 0 : element->layout.childGap;
-            w += child->box.w + UI_fmax3(prevMargin, padding.left, gap);
+            w += child->box.w + UI_fmax3(prevMargin, margin.left, gap);
             prevMargin = margin.right;
         } else {
             float leftSpace = UI_fmax2(padding.left, margin.left);
@@ -458,7 +421,7 @@ void UI__ElementFitWidth(UIElement *element) {
 
 void UI__ElementFitHeight(UIElement *element) {
     UIPadding padding = element->layout.padding;
-    if (element->content.children.len == 0) {
+    if (element->children.len == 0) {
         element->box.h = padding.top + padding.bottom;
         return;
     }
@@ -469,14 +432,14 @@ void UI__ElementFitHeight(UIElement *element) {
                   || element->layout.direction == UILayoutDirection_bottomToTop;
 
     float prevMargin = padding.top;
-    for (size_t i = 0, n = element->content.children.len; i < n; i++) {
-        UIElement *child = element->content.children.data[i];
+    for (size_t i = 0, n = element->children.len; i < n; i++) {
+        UIElement *child = element->children.data[i];
         UIPadding margin = child->layout.margin;
 
         if (sumHeight) {
             float gap = i == 0 ? 0 : element->layout.childGap;
-            h += child->box.h + UI_fmax3(prevMargin, padding.top, gap);
-            prevMargin = margin.right;
+            h += child->box.h + UI_fmax3(prevMargin, margin.top, gap);
+            prevMargin = margin.bottom;
         } else {
             float topSpace = UI_fmax2(padding.top, margin.top);
             float bottomSpace = UI_fmax2(padding.bottom, margin.bottom);
@@ -493,7 +456,11 @@ void UI__ElementFitHeight(UIElement *element) {
 }
 
 void UI__ElementGrowSize(UIElement *element) {
-    (void)element;
+    UI__ElementGrowWidth(element);
+    UI__ElementGrowHeight(element);
+
+    for (size_t i = 0, n = element->children.len; i < n; i++)
+        UI__ElementGrowSize(element->children.data[i]);
 }
 
 void UI__ElementGrowWidth(UIElement *element) {
@@ -508,8 +475,8 @@ void UI__ElementPosition(UIElement *element) {
     UI__ElementPositionX(element);
     UI__ElementPositionY(element);
 
-    for (size_t i = 0, n = element->content.children.len; i < n; i++)
-        UI__ElementPosition(element->content.children.data[i]);
+    for (size_t i = 0, n = element->children.len; i < n; i++)
+        UI__ElementPosition(element->children.data[i]);
 }
 
 void UI__ElementPositionX(UIElement *element) {
@@ -520,8 +487,8 @@ void UI__ElementPositionX(UIElement *element) {
     if (element->layout.direction == UILayoutDirection_topToBottom ||
         element->layout.direction == UILayoutDirection_bottomToTop)
     {
-        for (size_t i = 0, n = element->content.children.len; i < n; i++) {
-            UIElement *child = element->content.children.data[i];
+        for (size_t i = 0, n = element->children.len; i < n; i++) {
+            UIElement *child = element->children.data[i];
             switch (element->layout.alignX) {
             case UIAlignX_left:
                 child->box.x = baseX + UI_fmax2(padding.left, child->layout.margin.left);
@@ -533,7 +500,6 @@ void UI__ElementPositionX(UIElement *element) {
                 float offset = (elementW - child->box.w) / 2.0f;
                 float leftSpace = UI_fmax2(padding.left, child->layout.margin.left);
                 float rightSpace = UI_fmax2(padding.right, child->layout.margin.right);
-                printf("%f\n", offset);
                 if (offset < leftSpace)
                     offset = leftSpace;
                 else if (elementW - offset - child->box.w < rightSpace)
@@ -549,8 +515,8 @@ void UI__ElementPositionX(UIElement *element) {
     float prevMargin = padding.left;
     bool reverseChildren = element->layout.direction == UILayoutDirection_rightToLeft;
 
-    for (size_t i = 0, n = element->content.children.len; i < n; i++) {
-        UIElement *child = element->content.children.data[reverseChildren ? n - i - 1 : i];
+    for (size_t i = 0, n = element->children.len; i < n; i++) {
+        UIElement *child = element->children.data[reverseChildren ? n - i - 1 : i];
         float gap = i == 0 ? 0 : element->layout.childGap;
         childWidth += UI_fmax3(prevMargin, child->layout.margin.left, gap);
         child->box.x = childWidth;
@@ -558,7 +524,7 @@ void UI__ElementPositionX(UIElement *element) {
         prevMargin = child->layout.margin.right;
     }
     childWidth += UI_fmax2(prevMargin, padding.right);
-    float childOffset;
+    float childOffset = 0;
     switch (element->layout.alignX) {
         case UIAlignX_left:
             childOffset = 0;
@@ -571,8 +537,8 @@ void UI__ElementPositionX(UIElement *element) {
             break;
     }
 
-    for (size_t i = 0, n = element->content.children.len; i < n; i++) {
-        UIElement *child = element->content.children.data[i];
+    for (size_t i = 0, n = element->children.len; i < n; i++) {
+        UIElement *child = element->children.data[i];
         child->box.x += baseX + childOffset;
     }
 }
@@ -585,8 +551,8 @@ void UI__ElementPositionY(UIElement *element) {
     if (element->layout.direction == UILayoutDirection_leftToRight ||
         element->layout.direction == UILayoutDirection_rightToLeft)
     {
-        for (size_t i = 0, n = element->content.children.len; i < n; i++) {
-            UIElement *child = element->content.children.data[i];
+        for (size_t i = 0, n = element->children.len; i < n; i++) {
+            UIElement *child = element->children.data[i];
             switch (element->layout.alignY) {
             case UIAlignY_top:
                 child->box.y = baseY + UI_fmax2(padding.top, child->layout.margin.top);
@@ -613,8 +579,8 @@ void UI__ElementPositionY(UIElement *element) {
     float prevMargin = padding.top;
     bool reverseChildren = element->layout.direction == UILayoutDirection_rightToLeft;
 
-    for (size_t i = 0, n = element->content.children.len; i < n; i++) {
-        UIElement *child = element->content.children.data[reverseChildren ? n - i - 1 : i];
+    for (size_t i = 0, n = element->children.len; i < n; i++) {
+        UIElement *child = element->children.data[reverseChildren ? n - i - 1 : i];
         float gap = i == 0 ? 0 : element->layout.childGap;
         childHeight += UI_fmax3(prevMargin, child->layout.margin.top, gap);
         child->box.y = childHeight;
@@ -622,7 +588,7 @@ void UI__ElementPositionY(UIElement *element) {
         prevMargin = child->layout.margin.bottom;
     }
     childHeight += UI_fmax2(prevMargin, padding.bottom);
-    float childOffset;
+    float childOffset = 0;
     switch (element->layout.alignY) {
         case UIAlignY_top:
             childOffset = 0;
@@ -635,8 +601,8 @@ void UI__ElementPositionY(UIElement *element) {
             break;
     }
 
-    for (size_t i = 0, n = element->content.children.len; i < n; i++) {
-        UIElement *child = element->content.children.data[i];
+    for (size_t i = 0, n = element->children.len; i < n; i++) {
+        UIElement *child = element->children.data[i];
         child->box.y += baseY + childOffset;
     }
 }
@@ -644,35 +610,11 @@ void UI__ElementPositionY(UIElement *element) {
 bool UI__ElementDraw(UIElement *element) {
     if (!UI_DrawRect(element->context, element->box, element->backgroundColor))
         return false;
-    for (size_t i = 0, n = element->content.children.len; i < n; i++) {
-        if (!UI__ElementDraw(element->content.children.data[i]))
+    for (size_t i = 0, n = element->children.len; i < n; i++) {
+        if (!UI__ElementDraw(element->children.data[i]))
             return false;
     }
     return true;
-}
-
-UIElement *UI__Context_AllocElement(UIContext *ctx) {
-    UIElement *element = UI__ElementAllocator_Alloc(&ctx->elements);
-    element->context = ctx;
-    element->box = (UIRect) { 0, 0, 0, 0 };
-    element->parent = NULL;
-    element->backgroundColor = (UIColor) { 255, 255, 255, 255 };
-    element->content.children = (UIChildren) { .len = 0, .cap = 0, .data = NULL };
-    element->layout = (UILayout) {
-        .padding = { 0, 0, 0, 0 },
-        .margin = { 0, 0, 0, 0 },
-        .childGap = 0,
-        .alignX = UIAlignX_left,
-        .alignY = UIAlignY_top,
-        .direction = UILayoutDirection_topToBottom,
-        .w = { .type = UISizing_fit, .min = 0, .max = 0 },
-        .h = { .type = UISizing_fit, .min = 0, .max = 0 }
-    };
-    return element;
-}
-
-void UI__Context_FreeElement(UIContext *ctx, UIElement *element) {
-    UI__ElementAllocator_Free(&ctx->elements, element);
 }
 
 float UI_fmax2(float a, float b) {
