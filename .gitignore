@@ -562,3 +562,4 @@ CMakeUserPresets.json
 main
 main.exe
 build
+SDL3/

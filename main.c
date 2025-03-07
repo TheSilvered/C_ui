@@ -61,22 +61,20 @@ void logErrorAndExit(void)  {
 }
 
 bool generateLayout(UIElement *root) {
-    UI_BackgroundColor(root, (UIColor) { 0, 0, 0, 255 });
-    UI_Padding(root, 40.0f);
+    UI_BackgroundColor(root, UI_BLACK);
+    UI_LayoutDirection(root, UILayoutDirection_leftToRight);
 
-    UIElement *outer = UIElement_New(root);
-    UI_BackgroundColor(outer, (UIColor) { 255, 0, 0, 255 });
-    UI_AlignX(outer, UIAlignX_center);
-    UI_Padding(outer, 10.0f);
+    UIElement *sidebar = UIElement_New(root);
+    UI_BackgroundColor(sidebar, UI_GREEN);
+    UI_FillWidth(sidebar, 1.0f);
+    UI_FillHeight(sidebar, 1.0f);
+    UI_MinWidth(sidebar, 100);
+    UI_MaxWidth(sidebar, 300);
 
-    UIElement *child1 = UIElement_New(outer);
-    UI_BackgroundColor(child1, (UIColor) { 0, 255, 0, 255 });
-    UI_FixedWidth(child1, 300.0f);
-    UI_FixedHeight(child1, 300.0f);
+    UIElement *pageContent = UIElement_New(root);
+    UI_BackgroundColor(pageContent, UI_WHITE);
+    UI_FillWidth(pageContent, 3.0f);
+    UI_FillHeight(pageContent, 1.0f);
 
-    UIElement *child2 = UIElement_New(outer);
-    UI_BackgroundColor(child2, (UIColor) { 0, 0, 255, 255 });
-    UI_FixedWidth(child2, 200.0f);
-    UI_FixedHeight(child2, 200.0f);
     return true;
 }

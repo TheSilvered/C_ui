@@ -7,6 +7,12 @@
 
 #define UI_DEFAULT_MAX_ELEMENT_COUNT 8192
 
+#define UI_RED (UIColor) { 255, 0, 0, 255 }
+#define UI_GREEN (UIColor) { 0, 255, 0, 255 }
+#define UI_BLUE (UIColor) { 0, 0, 255, 255 }
+#define UI_BLACK (UIColor) { 0, 0, 0, 255 }
+#define UI_WHITE (UIColor) { 255, 255, 255, 255 }
+
 typedef struct UIRect {
     float x, y, w, h;
 } UIRect;
@@ -117,6 +123,8 @@ void UI_FillHeight(UIElement *element, float weight);
 
 void UI_MinWidth(UIElement *element, float width);
 void UI_MinHeight(UIElement *element, float height);
+void UI_MaxWidth(UIElement *element, float width);
+void UI_MaxHeight(UIElement *element, float height);
 
 void UI_Padding(UIElement *element, float padding);
 void UI_PaddingEx(UIElement *element, float top, float bottom, float left, float right);
@@ -272,6 +280,14 @@ void UI_MinWidth(UIElement *element, float width) {
 
 void UI_MinHeight(UIElement *element, float height) {
     element->layout.h_min = height;
+}
+
+void UI_MaxWidth(UIElement *element, float width) {
+    element->layout.w_max = width;
+}
+
+void UI_MaxHeight(UIElement *element, float height) {
+    element->layout.h_max = height;
 }
 
 void UI_Padding(UIElement *element, float padding) {
@@ -564,6 +580,7 @@ bool UI__ElementFillWidth(UIElement *element) {
     float childWidth = UI__ElementChildWidth(element);
     float totalWeight = 0;
     UI__Children *fillChildren = &element->context->_fillChildren;
+    fillChildren->len = 0;
 
     for (size_t i = 0, n = element->children.len; i < n; i++) {
         UIElement *child = element->children.data[i];
@@ -590,7 +607,7 @@ bool UI__ElementFillWidth(UIElement *element) {
         for (size_t i = 0, n = fillChildren->len; i < n; i++) {
             UIElement *child = fillChildren->data[i];
             float size = spaceRemaining * child->layout.w_weight / totalWeight;
-            if (size >= child->layout.w_min && size <= child->layout.w_max)
+            if (size >= child->layout.w_min && (size <= child->layout.w_max || child->layout.w_max == 0))
                 continue;
             if (size < child->layout.w_min)
                 size = child->layout.w_min;
@@ -639,6 +656,7 @@ bool UI__ElementFillHeight(UIElement *element) {
     float childHeight = UI__ElementChildHeight(element);
     float totalWeight = 0;
     UI__Children *fillChildren = &element->context->_fillChildren;
+    fillChildren->len = 0;
 
     for (size_t i = 0, n = element->children.len; i < n; i++) {
         UIElement *child = element->children.data[i];
@@ -665,7 +683,7 @@ bool UI__ElementFillHeight(UIElement *element) {
         for (size_t i = 0, n = fillChildren->len; i < n; i++) {
             UIElement *child = fillChildren->data[i];
             float size = spaceRemaining * child->layout.h_weight / totalWeight;
-            if (size >= child->layout.h_min && size <= child->layout.h_max)
+            if (size >= child->layout.h_min && (size <= child->layout.h_max || child->layout.h_max == 0))
                 continue;
             if (size < child->layout.h_min)
                 size = child->layout.h_min;
@@ -769,9 +787,9 @@ void UI__ElementPositionX(UIElement *element) {
     for (size_t i = 0, n = element->children.len; i < n; i++) {
         UIElement *child = element->children.data[reverseChildren ? n - i - 1 : i];
         float gap = i == 0 ? 0 : element->layout.childGap;
-        childWidth += UI_fmax3(prevMargin, child->layout.margin.left, gap);
-        UI__ElementSetX(child, baseX + childWidth + childOffset);
-        childWidth += child->box.w;
+        xOffset += UI_fmax3(prevMargin, child->layout.margin.left, gap);
+        UI__ElementSetX(child, baseX + xOffset + childOffset);
+        xOffset += child->box.w;
         prevMargin = child->layout.margin.right;
     }
 }
@@ -829,12 +847,11 @@ void UI__ElementPositionY(UIElement *element) {
         float topSpace = UI_fmax2(padding.top, firstChild->layout.margin.top);
         float bottomSpace = UI_fmax2(padding.bottom, lastChild->layout.margin.bottom);
         childHeight -= topSpace + bottomSpace;
-        float offset = (elementH - childHeight) / 2;
-        if (offset < topSpace)
-            offset = topSpace;
-        else if (elementH - offset - childHeight < bottomSpace)
-            offset = elementH - childHeight - bottomSpace;
-        break;
+        childOffset = (elementH - childHeight) / 2;
+        if (childOffset < topSpace)
+            childOffset = topSpace;
+        else if (elementH - childOffset - childHeight < bottomSpace)
+            childOffset = elementH - childHeight - bottomSpace;
     }
     }
 
@@ -843,37 +860,39 @@ void UI__ElementPositionY(UIElement *element) {
     for (size_t i = 0, n = element->children.len; i < n; i++) {
         UIElement *child = element->children.data[reverseChildren ? n - i - 1 : i];
         float gap = i == 0 ? 0 : element->layout.childGap;
-        childHeight += UI_fmax3(prevMargin, child->layout.margin.top, gap);
-        UI__ElementSetY(child, baseY + childHeight + childOffset);
-        childHeight += child->box.h;
+        yOffset += UI_fmax3(prevMargin, child->layout.margin.top, gap);
+        UI__ElementSetY(child, baseY + yOffset + childOffset);
+        yOffset += child->box.h;
         prevMargin = child->layout.margin.bottom;
     }
 }
 
 void UI__ElementSetW(UIElement *element, float w) {
-    float newW = (element->box.w + w) / 2;
-    if (newW < element->layout.w_min)
-        newW = element->layout.w_min;
-    else if (newW > element->layout.w_max)
-        newW = element->layout.w_max;
-    element->box.w = newW;
+    if (w < element->layout.w_min)
+        w = element->layout.w_min;
+    else if (w > element->layout.w_max && element->layout.w_max != 0)
+        w = element->layout.w_max;
+    if (w < 0)
+        w = 0;
+    element->box.w = w;
 }
 
 void UI__ElementSetH(UIElement *element, float h) {
-    float newH = (element->box.h + h) / 2;
-    if (newH < element->layout.h_min)
-        newH = element->layout.h_min;
-    else if (newH > element->layout.h_max)
-        newH = element->layout.h_max;
-    element->box.h = newH;
+    if (h < element->layout.h_min)
+        h = element->layout.h_min;
+    else if (h > element->layout.h_max && element->layout.h_max != 0)
+        h = element->layout.h_max;
+    if (h < 0)
+        h = 0;
+    element->box.h = h;
 }
 
 void UI__ElementSetX(UIElement *element, float x) {
-    element->box.x = (element->box.x + x) / 2;
+    element->box.x = x;
 }
 
 void UI__ElementSetY(UIElement *element, float y) {
-    element->box.y = (element->box.y + y) / 2;
+    element->box.y = y;
 }
 
 bool UI__ElementDraw(UIElement *element) {
