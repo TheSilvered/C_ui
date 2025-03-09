@@ -562,4 +562,6 @@ CMakeUserPresets.json
 main
 main.exe
 build
-SDL3/
+SDL3/*
+!SDL3/buildSDL.*
+!SDL3/SDLpath.*

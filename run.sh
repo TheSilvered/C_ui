@@ -1,3 +1,9 @@
 #! /usr/bin/sh
 
-cc main.c -ISDL3/include -LSDL3/lib -lSDL3 -g -Wall -Wextra -Wpedantic -o main && export LD_LIBRARY_PATH=./SDL3/lib && ./main
+sh SDL3/buildSDL.sh
+
+SDL_PATH="$(SDL3/SDLpath.sh)"
+INCLUDE=${SDL_PATH}/include
+LIB=${SDL_PATH}/lib
+
+cc main.c -I$INCLUDE -L$LIB -lSDL3 -g -Wall -Wextra -Wpedantic -o main && export LD_LIBRARY_PATH=$LIB && ./main

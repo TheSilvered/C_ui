@@ -72,29 +72,21 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <OutDir>..\build\VisualStudio\$(Platform)\$(Configuration)\</OutDir>
-    <IncludePath>..\SDL3\include;$(IncludePath)</IncludePath>
-    <LibraryPath>..\SDL3\lib;$(LibraryPath)</LibraryPath>
     <CustomBuildBeforeTargets />
     <CustomBuildAfterTargets />
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <OutDir>..\build\VisualStudio\$(Platform)\$(Configuration)\</OutDir>
-    <IncludePath>..\SDL3\include;$(IncludePath)</IncludePath>
-    <LibraryPath>..\SDL3\lib;$(LibraryPath)</LibraryPath>
     <CustomBuildBeforeTargets />
     <CustomBuildAfterTargets />
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <OutDir>..\build\VisualStudio\$(Platform)\$(Configuration)\</OutDir>
-    <IncludePath>..\SDL3\include;$(IncludePath)</IncludePath>
-    <LibraryPath>..\SDL3\lib;$(LibraryPath)</LibraryPath>
     <CustomBuildBeforeTargets />
     <CustomBuildAfterTargets />
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <OutDir>..\build\VisualStudio\$(Platform)\$(Configuration)\</OutDir>
-    <IncludePath>..\SDL3\include;$(IncludePath)</IncludePath>
-    <LibraryPath>..\SDL3\lib;$(LibraryPath)</LibraryPath>
     <CustomBuildBeforeTargets />
     <CustomBuildAfterTargets />
   </PropertyGroup>
@@ -104,19 +96,23 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <AdditionalIncludeDirectories>../SDL3/SDL/include</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>SDL3.lib;$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>..\build\VisualStudio\$(Platform)\$(Configuration)\SDL3</AdditionalLibraryDirectories>
     </Link>
-    <CustomBuildStep>
-      <Command>
-      </Command>
-    </CustomBuildStep>
-    <PostBuildEvent>
-      <Command>copy ..\SDL3\bin\SDL3.dll "..\build\VisualStudio\$(Platform)\$(Configuration)\SDL3.dll"</Command>
-    </PostBuildEvent>
+    <PreBuildEvent>
+      <Command>powershell ..\SDL3\buildSDL.ps1</Command>
+    </PreBuildEvent>
+    <PreBuildEvent>
+      <Message>Compile SDL3</Message>
+    </PreBuildEvent>
+    <PreLinkEvent>
+      <Command>powershell .\copySDL.ps1 "..\build\VisualStudio\$(Platform)\$(Configuration)"</Command>
+    </PreLinkEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
@@ -126,6 +122,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <AdditionalIncludeDirectories>../SDL3/SDL/include</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -133,14 +130,17 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>SDL3.lib;$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>..\build\VisualStudio\$(Platform)\$(Configuration)\SDL3</AdditionalLibraryDirectories>
     </Link>
-    <CustomBuildStep>
-      <Command>
-      </Command>
-    </CustomBuildStep>
-    <PostBuildEvent>
-      <Command>copy ..\SDL3\bin\SDL3.dll "..\build\VisualStudio\$(Platform)\$(Configuration)\SDL3.dll"</Command>
-    </PostBuildEvent>
+    <PreBuildEvent>
+      <Command>powershell ..\SDL3\buildSDL.ps1</Command>
+    </PreBuildEvent>
+    <PreBuildEvent>
+      <Message>Compile SDL3</Message>
+    </PreBuildEvent>
+    <PreLinkEvent>
+      <Command>powershell .\copySDL.ps1 "..\build\VisualStudio\$(Platform)\$(Configuration)"</Command>
+    </PreLinkEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
@@ -148,19 +148,23 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <AdditionalIncludeDirectories>../SDL3/SDL/include</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>SDL3.lib;$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>..\build\VisualStudio\$(Platform)\$(Configuration)\SDL3</AdditionalLibraryDirectories>
     </Link>
-    <CustomBuildStep>
-      <Command>
-      </Command>
-    </CustomBuildStep>
-    <PostBuildEvent>
-      <Command>copy ..\SDL3\bin\SDL3.dll "..\build\VisualStudio\$(Platform)\$(Configuration)\SDL3.dll"</Command>
-    </PostBuildEvent>
+    <PreBuildEvent>
+      <Command>powershell ..\SDL3\buildSDL.ps1</Command>
+    </PreBuildEvent>
+    <PreBuildEvent>
+      <Message>Compile SDL3</Message>
+    </PreBuildEvent>
+    <PreLinkEvent>
+      <Command>powershell .\copySDL.ps1 "..\build\VisualStudio\$(Platform)\$(Configuration)"</Command>
+    </PreLinkEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -170,6 +174,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <AdditionalIncludeDirectories>../SDL3/SDL/include</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -177,14 +182,17 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>SDL3.lib;$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>..\build\VisualStudio\$(Platform)\$(Configuration)\SDL3</AdditionalLibraryDirectories>
     </Link>
-    <CustomBuildStep>
-      <Command>
-      </Command>
-    </CustomBuildStep>
-    <PostBuildEvent>
-      <Command>copy ..\SDL3\bin\SDL3.dll "..\build\VisualStudio\$(Platform)\$(Configuration)\SDL3.dll"</Command>
-    </PostBuildEvent>
+    <PreBuildEvent>
+      <Command>powershell ..\SDL3\buildSDL.ps1</Command>
+    </PreBuildEvent>
+    <PreBuildEvent>
+      <Message>Compile SDL3</Message>
+    </PreBuildEvent>
+    <PreLinkEvent>
+      <Command>powershell .\copySDL.ps1 "..\build\VisualStudio\$(Platform)\$(Configuration)"</Command>
+    </PreLinkEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="..\ui.h" />
