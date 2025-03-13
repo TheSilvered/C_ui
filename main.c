@@ -20,7 +20,7 @@ int main(void) {
     if (renderer == NULL) logErrorAndExit();
 
     UIContext context;
-    if (!UIContext_Init(&context, UI_DEFAULT_MAX_ELEMENT_COUNT, (void *)renderer))
+    if (!UIContext_Init(&context, (void *)renderer))
         return 1;
 
     if (!generateLayout(context.root))

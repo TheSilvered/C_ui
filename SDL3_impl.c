@@ -2,15 +2,15 @@
 #include "SDL3/SDL.h"
 #include "ui.h"
 
-void *UI_MemAlloc(size_t size) {
+void *UI_MemAlloc(uint32_t size) {
     return malloc(size);
 }
 
-void *UI_MemExpand(void *block, size_t size) {
+void *UI_MemExpand(void *block, uint32_t size) {
     return realloc(block, size);
 }
 
-void *UI_MemShrink(void *block, size_t size) {
+void *UI_MemShrink(void *block, uint32_t size) {
     void *new_block = realloc(block, size);
     return new_block == NULL ? block : new_block;
 }
