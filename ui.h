@@ -63,9 +63,9 @@ typedef enum UIAlignY {
 typedef struct UILayout {
     UIPadding padding;
     UIPadding margin;
-    UILayoutDirection direction : 2;
-    UIAlignX alignX : 2;
-    UIAlignY alignY : 2;
+    UILayoutDirection direction : 3;
+    UIAlignX alignX : 3;
+    UIAlignY alignY : 3;
     UISizing w_sizing : 8;
     UISizing h_sizing : 8;
     float childGap;
